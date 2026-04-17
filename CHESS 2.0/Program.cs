@@ -1,12 +1,4 @@
-﻿
-using System.Security.AccessControl;
-
-string ANSI(Piece Text, int color) // Text Color    (Credit to Harry, he helped with ANSI)
-{
-    Piece text = Text;
-    string ansi = $"\u001b[38;2;{(color >> 16) & 0xff};{(color >> 8) & 0xff};{color & 0xff}m";
-    return ansi + text;
-}
+﻿using System.Security.AccessControl;
 
 // Places the pieces in the starting setup
 Piece[,] board = new Piece[,] { 
@@ -22,7 +14,7 @@ Piece[,] board = new Piece[,] {
 // Keeps track of the position of the selected square
 int selectedRow = 3;
 int selectedColumn = 3;
-void DrawSquare(int Row, int Col, bool canBeCaptured) // Draws the square
+void DrawSquare(int Row, int Col, bool canBeCaptured, bool canBeMovedTo) // Draws the square
 {
     bool isSelected = (Row == selectedRow && Col == selectedColumn);
     bool isWhite;
@@ -34,7 +26,10 @@ void DrawSquare(int Row, int Col, bool canBeCaptured) // Draws the square
     {
         isWhite = false;
     }
-    Console.BackgroundColor = isSelected ? ConsoleColor.Green : canBeCaptured? ConsoleColor.Red : isWhite ? ConsoleColor.White : ConsoleColor.DarkGray;
+    Console.BackgroundColor = isSelected ? ConsoleColor.Green : 
+        canBeCaptured? ConsoleColor.Red : 
+        canBeMovedTo? ConsoleColor.DarkYellow : 
+        isWhite ? ConsoleColor.White : ConsoleColor.DarkGray;
     
     // Draws the whole square
     if (Row == 0)
@@ -56,14 +51,9 @@ void DrawSquare(int Row, int Col, bool canBeCaptured) // Draws the square
     Console.ResetColor();
 }
 
-bool canCapture = false;
-void RemovePieceFromPos()
+void PawnMove(int tempSelectedRow, int tempSelectedColumn)
 {
-    board[selectedRow, selectedColumn] = Piece._______;
-}
-void PawnMove()
-{
-    Piece position = board[selectedRow, selectedColumn];
+    Piece position = board[tempSelectedRow, tempSelectedColumn];
     bool isWhite = true;
 
     if (position == Piece.Pawni__) // Determines which side the pawn belongs to
@@ -75,28 +65,26 @@ void PawnMove()
         isWhite = false;
     }
 
-    if (isWhite)
+    while (true)
     {
-        if (board[selectedRow - 1, selectedColumn] == Piece._______) // Checks if something is in front of the pawn
+        if (isWhite)
         {
-            board[selectedRow - 1, selectedColumn] = Piece.Pawni__;
-            RemovePieceFromPos();
+            DrawSquare(tempSelectedRow - 1, tempSelectedColumn, false, true);
+            if (tempSelectedRow == 6)
+            {
+                DrawSquare(tempSelectedRow - 2, tempSelectedColumn, false, true);
+            }
         }
-
-        if (board[selectedRow - 1, selectedColumn + 1] != Piece._______ || // Checks if pawn can capture something
-            board[selectedRow - 1, selectedColumn - 1] != Piece._______)
+        MoveSelectedSquare();
+        if (MoveSelectedSquare() == ConsoleKey.Enter)
         {
-            canCapture = true;
-            DrawSquare(selectedColumn - 2, selectedRow + 2, true);
-            DrawSquare(selectedColumn - 2, selectedRow, true);
-        }
-    }
-    else
-    {
-        if (board[selectedRow + 1, selectedColumn] == Piece._______) // Check if something is in front of the pawn
-        {
-            board[selectedRow + 1, selectedColumn] = Piece.Pawn___;
-            RemovePieceFromPos();
+            if (board[selectedRow, selectedColumn] == Piece._______)
+            {
+                board[tempSelectedRow, tempSelectedColumn] = Piece._______;
+                board[selectedRow, selectedColumn] = Piece.Pawni__;
+                DrawBoard();
+                break;
+            }
         }
     }
 }
@@ -126,44 +114,53 @@ void DrawBoard()
             {
                 Console.ForegroundColor = ConsoleColor.DarkMagenta;
             }
-            DrawSquare(height, length, canCapture? true : false);
+            DrawSquare(height, length, false, false);
         }
     }
 }
-
-// Start of game loop
-while (true)
+DrawBoard();
+ConsoleKey MoveSelectedSquare()
 {
-    DrawBoard();
-
-    // Move the selected square using arrow keys
     ConsoleKey Navigate = Console.ReadKey(true).Key;
     switch (Navigate)
     {
         case ConsoleKey.UpArrow:
             selectedRow--;
+            DrawSquare(selectedRow + 1, selectedColumn, false, false);
+            DrawSquare(selectedRow, selectedColumn, false, false);
             break;
 
         case ConsoleKey.DownArrow:
             selectedRow++;
+            DrawSquare(selectedRow - 1, selectedColumn, false, false);
+            DrawSquare(selectedRow, selectedColumn, false, false);
             break;
 
         case ConsoleKey.LeftArrow:
             selectedColumn--;
+            DrawSquare(selectedRow, selectedColumn + 1, false, false);
+            DrawSquare(selectedRow, selectedColumn, false, false);
             break;
 
         case ConsoleKey.RightArrow:
             selectedColumn++;
+            DrawSquare(selectedRow, selectedColumn - 1, false, false);
+            DrawSquare(selectedRow, selectedColumn, false, false);
             break;
-
-        case ConsoleKey.Enter:
-            if (board[selectedRow, selectedColumn] == Piece.Pawni__ ||
-                board[selectedRow, selectedColumn] == Piece.Pawn___)
-            {
-                PawnMove();
-                Console.ReadKey();
-            }
-            break;
+    }
+    return Navigate;
+}
+// Start of game loop
+while (true)
+{
+    MoveSelectedSquare();
+    if (MoveSelectedSquare() == ConsoleKey.Enter)
+    {
+        if (board[selectedRow, selectedColumn] == Piece.Pawni__ ||
+            board[selectedRow, selectedColumn] == Piece.Pawn___)
+        {
+            PawnMove(selectedRow, selectedColumn);
+        }
     }
 }
 enum Piece // List of possible pieces
