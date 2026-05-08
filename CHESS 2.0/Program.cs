@@ -3,6 +3,7 @@ using System.ComponentModel;
 
 bool[,] canBeCaptured = new bool[8, 8];
 bool[,] canBeMovedTo = new bool[8, 8];
+bool[,] kingCheckSquares = new bool[8, 8];
 
 /// Resets the canBeCaptured and canBeMovedTo arrays
 void ResetMoveData()
@@ -13,6 +14,7 @@ void ResetMoveData()
         {
             canBeMovedTo[i, j] = false;
             canBeCaptured[i, j] = false;
+            kingCheckSquares[i, j] = false;
         }
     }
 }
@@ -53,27 +55,30 @@ bool isBlackPiece(Piece? piece)
 }
 
 // Keeps track of the position of the selected square
-int selectedRow = 3;
-int selectedColumn = 3;
+int selectedRow = 4;
+int selectedColumn = 4;
+int y = 0;
+int x = 0;
 
 /// Draws a square
-void DrawSquare(int row, int col, bool canBeCaptured, bool canBeMovedTo) // Draws the square
+void DrawSquare(int row, int col, bool canBeCaptured, bool canBeMovedTo, bool kingInCheck) // Draws the square
 {
     bool isSelected = (row == selectedRow && col == selectedColumn);
 
-    bool isWhite;
+    bool isWhiteSquare;
     if (((col + row) & 1) == 0) // Checks if the square is white or not
     {
-        isWhite = true;
+        isWhiteSquare = true;
     }
     else
     {
-        isWhite = false;
+        isWhiteSquare = false;
     }
-    Console.BackgroundColor = isSelected ? ConsoleColor.Green : 
-                              canBeCaptured? ConsoleColor.Red : 
-                              canBeMovedTo? ConsoleColor.DarkYellow : 
-                              isWhite ? ConsoleColor.White : ConsoleColor.DarkGray;
+    Console.BackgroundColor = isSelected? ConsoleColor.Green :
+                              kingInCheck? ConsoleColor.Blue :
+                              canBeCaptured? ConsoleColor.Red :
+                              canBeMovedTo? ConsoleColor.DarkYellow :
+                              isWhiteSquare? ConsoleColor.White : ConsoleColor.DarkGray;
 
     if (board[row, col] == Piece._Rooki_ || // Checks if piece belongs to White, changes its color accordingly
         board[row, col] == Piece.Knighti ||
@@ -86,7 +91,7 @@ void DrawSquare(int row, int col, bool canBeCaptured, bool canBeMovedTo) // Draw
     }
     else if (board[row, col] == Piece._______)
     {
-        Console.ForegroundColor = isSelected? ConsoleColor.Green : isWhite? ConsoleColor.White : ConsoleColor.DarkGray;
+        Console.ForegroundColor = isSelected? ConsoleColor.Green : isWhiteSquare? ConsoleColor.White : ConsoleColor.DarkGray;
     }
     else
     {
@@ -102,24 +107,30 @@ void DrawSquare(int row, int col, bool canBeCaptured, bool canBeMovedTo) // Draw
     {
         Console.SetCursorPosition(col * 7, row * 3 - 1);
     }
-    Console.Write("       ");
-    //Console.Write($"{blackRook1HasMoved},{blackRook2HasMoved}");
+    //Console.Write("       ");
+    //Console.Write($" {x}, {y}  ");
+    Console.Write($" {kingCheckSquares[row, col]} ");
     Console.SetCursorPosition(col * 7, row * 3);
     Console.Write(board[row, col]);
     Console.SetCursorPosition(col * 7, 1 + row * 3);
-    Console.Write("       ");
-    //Console.Write($"{whiteRook1HasMoved},{whiteRook2HasMoved}");
+    //Console.Write("       ");
+    Console.Write($"{row},{col}:{y},{x}");
     Console.SetCursorPosition(col * 7, row * 3);
 }
 
 
 // ----------------------------- METHODS FOR PIECE MOVES -----------------------------
 
+int whiteKingRowPos = 7;
+int whiteKingColPos = 4;
+int blackKingRowPos = 0;
+int blackKingColPos = 4;
+
 /// Sets the pieces position to the new selected position
-void SetPiecePos(Piece piece, int tempSelectedRow, int tempSelectedColumn)
+void SetPiecePos(Piece piece, int tempSelectedRow, int tempSelectedColumn, int selectedRowOffset, int selectedColOffset)
 {
     board[tempSelectedRow, tempSelectedColumn] = Piece._______; // Sets old place to free
-    board[selectedRow, selectedColumn] = piece; // Sets new place to piece
+    board[selectedRow + selectedRowOffset, selectedColumn + selectedColOffset] = piece; // Sets new place to piece
     DrawBoard(); // Updates every square
 }
 
@@ -129,7 +140,7 @@ void CanBeMovedToPos(int rowOffset, int colOffset, int tempSelectedRow, int temp
     int row = tempSelectedRow + rowOffset;
     int col = tempSelectedColumn + colOffset;
     canBeMovedTo[row, col] = true;
-    DrawSquare(row, col, false, true); // Updates square to be able to move to
+    DrawSquare(row, col, false, true, false); // Updates square to be able to move to
 }
 
 /// Sets the square to captureable
@@ -149,7 +160,7 @@ void CanBeCapturedPos(int rowOffset, int colOffset, int tempSelectedRow, int tem
         row >= 0 && row <= 7)
     {
         canBeCaptured[row, col] = true;
-        DrawSquare(row, col, true, false); // Updates square to be able to capture to
+        DrawSquare(row, col, true, false, false); // Updates square to be able to capture to
     }
 }
 
@@ -185,7 +196,7 @@ bool IsWhite(Piece piece, int tempSelectedRow, int tempSelectedColumn)
 }
 
 /// Checks directions until it gets blocked / can capture
-void CanMoveUntilBlocked(int rowOffset, int colOffset, bool isWhite, int tempSelectedRow, int tempSelectedColumn)
+void CanMoveUntilBlocked(int rowOffset, int colOffset, bool isWhite, int tempSelectedRow, int tempSelectedColumn, bool checkKingCheck)
 {
     for (int i = 1; i < 8; i++)
     {
@@ -198,7 +209,7 @@ void CanMoveUntilBlocked(int rowOffset, int colOffset, bool isWhite, int tempSel
         }
 
         Piece target = board[row, col]; // The square it is checking
-        if (target == Piece._______) // Checks if the square is empty
+        if (target == Piece._______ && !checkKingCheck) // Checks if the square is empty
         {
             CanBeMovedToPos(rowOffset * i, colOffset * i, tempSelectedRow, tempSelectedColumn);
         }
@@ -206,16 +217,63 @@ void CanMoveUntilBlocked(int rowOffset, int colOffset, bool isWhite, int tempSel
         {
             if (isWhite? !isWhitePiece(target) : !isBlackPiece(target)) // Checks if it can capture on the square
             {
-                CanBeCapturedPos(rowOffset * i, colOffset * i, tempSelectedRow, tempSelectedColumn);
+                if (checkKingCheck)
+                {
+                    kingCheckSquares[tempSelectedRow + rowOffset * i, tempSelectedColumn + colOffset * i] = true;
+                    //CanMoveUntilBlocked(rowOffset, colOffset, isWhite, tempSelectedRow, tempSelectedColumn, true);
+                }
+                else
+                {
+                    CanBeCapturedPos(rowOffset * i, colOffset * i, tempSelectedRow, tempSelectedColumn);
+                }
             }
             break;
         }
     }
 }
 
+/// Checks if the king is (or will be) in check
+void CheckKingCheck(bool isWhite)
+{
+    void CheckPieceThatChecks(int rowDirection, int colDirection)
+    {
+        CanMoveUntilBlocked(rowDirection, colDirection, isWhite, isWhite? whiteKingRowPos : blackKingRowPos,
+                            isWhite? whiteKingColPos : blackKingColPos, true);
+
+        for (int i = 0; i < 7; i++)
+        {
+            x = i;
+
+            for (int j = 0; j < 7; j++)
+            {
+                y = j;
+                
+                if (kingCheckSquares[j, i])
+                {
+                    if (rowDirection == 0 || colDirection == 0)
+                    {
+                        //CheckPieceThatChecks(1, 0);
+                        DrawSquare(whiteKingRowPos,whiteKingColPos, false, false, true);
+                    }
+                }
+            }
+        }
+    }
+
+    CheckPieceThatChecks(1, 0);
+    CheckPieceThatChecks(-1, 0);
+    CheckPieceThatChecks(0, 1);
+    CheckPieceThatChecks(0, -1);
+    CheckPieceThatChecks(1, 1);
+    CheckPieceThatChecks(-1, -1);
+    CheckPieceThatChecks(-1, 1);
+    CheckPieceThatChecks(1, -1);
+}
+
 
 // ----------------------------- PIECE MOVES -----------------------------
 
+// Keeps track of Rook and King first moves for castling purposes
 bool whiteRook1HasMoved = false;
 bool blackRook1HasMoved = false;
 bool whiteRook2HasMoved = false;
@@ -277,14 +335,16 @@ void PawnMove(int tempSelectedRow, int tempSelectedColumn) // ----- PAWN -----
         {
             if (canBeMovedTo[selectedRow, selectedColumn]) // Move
             {
-                SetPiecePos(isWhite ? Piece._Pawni_ : Piece._Pawn__, tempSelectedRow, tempSelectedColumn);
+                SetPiecePos(isWhite ? Piece._Pawni_ : Piece._Pawn__, tempSelectedRow, tempSelectedColumn, 0, 0);
                 Promotion();
+                CheckKingCheck(isWhite);
                 break;
             }
             if (canBeCaptured[selectedRow, selectedColumn]) // Capture
             {
-                SetPiecePos(isWhite ? Piece._Pawni_ : Piece._Pawn__, tempSelectedRow, tempSelectedColumn);
+                SetPiecePos(isWhite ? Piece._Pawni_ : Piece._Pawn__, tempSelectedRow, tempSelectedColumn, 0, 0);
                 Promotion();
+                CheckKingCheck(isWhite);
                 break;
             }
             else if (selectedRow == tempSelectedRow && selectedColumn == tempSelectedColumn) // Selecting original pos to deselect
@@ -300,12 +360,12 @@ void PawnMove(int tempSelectedRow, int tempSelectedColumn) // ----- PAWN -----
             void ReplacePiece(Piece whitePiece, Piece blackPiece, int i)
             {
                 board[isWhite ? 0 : 7, i] = isWhite ? whitePiece : blackPiece;
-                SetPiecePos(isWhite ? whitePiece : blackPiece, tempSelectedRow, tempSelectedColumn);
+                SetPiecePos(isWhite ? whitePiece : blackPiece, tempSelectedRow, tempSelectedColumn, 0, 0);
             }
             string[] options = {$"{(isWhite? Piece.Queeni_ : Piece._Queen_)}",
-                                        $"{(isWhite ? Piece._Rooki_ : Piece._Rook__)}",
-                                        $"{(isWhite? Piece.Bishopi : Piece.Bishop_)}",
-                                        $"{(isWhite? Piece.Knighti : Piece.Knight_)}"};
+                                $"{(isWhite ? Piece._Rooki_ : Piece._Rook__)}",
+                                $"{(isWhite? Piece.Bishopi : Piece.Bishop_)}",
+                                $"{(isWhite? Piece.Knighti : Piece.Knight_)}"};
             int selected = 0;
 
             for (int i = 0; i < 7; i++)
@@ -316,15 +376,26 @@ void PawnMove(int tempSelectedRow, int tempSelectedColumn) // ----- PAWN -----
 
                     while (board[0, i] == Piece._Pawni_ || board[7, i] == Piece._Pawn__)
                     {
+                        if (selected < 0)
+                        {
+                            selected = 3;
+                        }
+                        else if (selected > 3)
+                        {
+                            selected = 0;
+                        }
+
                         Console.SetCursorPosition(0, 25);
                         for (int j = 0; j < options.Length; j++)
                         {
                             if (j == selected)
                             {
+                                Console.BackgroundColor = ConsoleColor.DarkMagenta;
                                 Console.WriteLine($"> {options[j]}");
                             }
                             else
                             {
+                                Console.BackgroundColor = ConsoleColor.Black;
                                 Console.WriteLine($"  {options[j]}");
                             }
                         }
@@ -395,10 +466,10 @@ void RookMove(int tempSelectedRow, int tempSelectedColumn) // ----- ROOK -----
 
     while (true)
     {
-        CanMoveUntilBlocked(1, 0, isWhite, tempSelectedRow, tempSelectedColumn);
-        CanMoveUntilBlocked(-1, 0, isWhite, tempSelectedRow, tempSelectedColumn);
-        CanMoveUntilBlocked(0, 1, isWhite, tempSelectedRow, tempSelectedColumn);
-        CanMoveUntilBlocked(0, -1, isWhite, tempSelectedRow, tempSelectedColumn);
+        CanMoveUntilBlocked(1, 0, isWhite, tempSelectedRow, tempSelectedColumn, false);
+        CanMoveUntilBlocked(-1, 0, isWhite, tempSelectedRow, tempSelectedColumn, false);
+        CanMoveUntilBlocked(0, 1, isWhite, tempSelectedRow, tempSelectedColumn, false);
+        CanMoveUntilBlocked(0, -1, isWhite, tempSelectedRow, tempSelectedColumn, false);
 
         // ----- Move Piece -----
         if (MoveSelectedSquare() == ConsoleKey.Enter) // Moves the piece if possible
@@ -406,15 +477,15 @@ void RookMove(int tempSelectedRow, int tempSelectedColumn) // ----- ROOK -----
             if (canBeMovedTo[selectedRow, selectedColumn]) // Move
             {
                 FirsRookMove();
-
-                SetPiecePos(isWhite? Piece._Rooki_ : Piece._Rook__, tempSelectedRow, tempSelectedColumn);
+                SetPiecePos(isWhite? Piece._Rooki_ : Piece._Rook__, tempSelectedRow, tempSelectedColumn, 0, 0);
+                CheckKingCheck(isWhite);
                 break;
             }
             if (canBeCaptured[selectedRow, selectedColumn]) // Capture
             {
                 FirsRookMove();
-
-                SetPiecePos(isWhite? Piece._Rooki_ : Piece._Rook__, tempSelectedRow, tempSelectedColumn);
+                SetPiecePos(isWhite? Piece._Rooki_ : Piece._Rook__, tempSelectedRow, tempSelectedColumn, 0, 0);
+                CheckKingCheck(isWhite);
                 break;
             }
             else if (selectedRow == tempSelectedRow && selectedColumn == tempSelectedColumn) // Selecting original pos to deselect
@@ -432,22 +503,24 @@ void BishopMove(int tempSelectedRow, int tempSelectedColumn) // ----- BISHOP ---
     bool isWhite = IsWhite(Piece.Bishopi, tempSelectedRow, tempSelectedColumn);
     while (true)
     {
-        CanMoveUntilBlocked(1, 1, isWhite, tempSelectedRow, tempSelectedColumn);
-        CanMoveUntilBlocked(-1, -1, isWhite, tempSelectedRow, tempSelectedColumn);
-        CanMoveUntilBlocked(-1, 1, isWhite, tempSelectedRow, tempSelectedColumn);
-        CanMoveUntilBlocked(1, -1, isWhite, tempSelectedRow, tempSelectedColumn);
+        CanMoveUntilBlocked(1, 1, isWhite, tempSelectedRow, tempSelectedColumn, false);
+        CanMoveUntilBlocked(-1, -1, isWhite, tempSelectedRow, tempSelectedColumn, false);
+        CanMoveUntilBlocked(-1, 1, isWhite, tempSelectedRow, tempSelectedColumn, false);
+        CanMoveUntilBlocked(1, -1, isWhite, tempSelectedRow, tempSelectedColumn, false);
 
         // ----- Move Piece -----
         if (MoveSelectedSquare() == ConsoleKey.Enter) // Moves the piece if possible
         {
             if (canBeMovedTo[selectedRow, selectedColumn]) // Move
             {
-                SetPiecePos(isWhite ? Piece.Bishopi : Piece.Bishop_, tempSelectedRow, tempSelectedColumn);
+                SetPiecePos(isWhite ? Piece.Bishopi : Piece.Bishop_, tempSelectedRow, tempSelectedColumn, 0, 0);
+                CheckKingCheck(isWhite);
                 break;
             }
             if (canBeCaptured[selectedRow, selectedColumn]) // Capture
             {
-                SetPiecePos(isWhite ? Piece.Bishopi : Piece.Bishop_, tempSelectedRow, tempSelectedColumn);
+                SetPiecePos(isWhite ? Piece.Bishopi : Piece.Bishop_, tempSelectedRow, tempSelectedColumn, 0, 0);
+                CheckKingCheck(isWhite);
                 break;
             }
             else if (selectedRow == tempSelectedRow && selectedColumn == tempSelectedColumn) // Selecting original pos to deselect
@@ -465,26 +538,28 @@ void QueenMove(int tempSelectedRow, int tempSelectedColumn) // ----- QUEEN -----
     bool isWhite = IsWhite(Piece.Queeni_, tempSelectedRow, tempSelectedColumn);
     while (true)
     {
-        CanMoveUntilBlocked(1, 0, isWhite, tempSelectedRow, tempSelectedColumn);
-        CanMoveUntilBlocked(-1, 0, isWhite, tempSelectedRow, tempSelectedColumn);
-        CanMoveUntilBlocked(0, 1, isWhite, tempSelectedRow, tempSelectedColumn);
-        CanMoveUntilBlocked(0, -1, isWhite, tempSelectedRow, tempSelectedColumn);
-        CanMoveUntilBlocked(1, 1, isWhite, tempSelectedRow, tempSelectedColumn);
-        CanMoveUntilBlocked(-1, -1, isWhite, tempSelectedRow, tempSelectedColumn);
-        CanMoveUntilBlocked(-1, 1, isWhite, tempSelectedRow, tempSelectedColumn);
-        CanMoveUntilBlocked(1, -1, isWhite, tempSelectedRow, tempSelectedColumn);
+        CanMoveUntilBlocked(1, 0, isWhite, tempSelectedRow, tempSelectedColumn, false);
+        CanMoveUntilBlocked(-1, 0, isWhite, tempSelectedRow, tempSelectedColumn, false);
+        CanMoveUntilBlocked(0, 1, isWhite, tempSelectedRow, tempSelectedColumn, false);
+        CanMoveUntilBlocked(0, -1, isWhite, tempSelectedRow, tempSelectedColumn, false);
+        CanMoveUntilBlocked(1, 1, isWhite, tempSelectedRow, tempSelectedColumn, false);
+        CanMoveUntilBlocked(-1, -1, isWhite, tempSelectedRow, tempSelectedColumn, false);
+        CanMoveUntilBlocked(-1, 1, isWhite, tempSelectedRow, tempSelectedColumn, false);
+        CanMoveUntilBlocked(1, -1, isWhite, tempSelectedRow, tempSelectedColumn, false);
 
         // ----- Move Piece -----
         if (MoveSelectedSquare() == ConsoleKey.Enter) // Moves the piece if possible
         {
             if (canBeMovedTo[selectedRow, selectedColumn]) // Move
             {
-                SetPiecePos(isWhite ? Piece.Queeni_ : Piece._Queen_, tempSelectedRow, tempSelectedColumn);
+                SetPiecePos(isWhite ? Piece.Queeni_ : Piece._Queen_, tempSelectedRow, tempSelectedColumn, 0, 0);
+                CheckKingCheck(isWhite);
                 break;
             }
             if (canBeCaptured[selectedRow, selectedColumn]) // Capture
             {
-                SetPiecePos(isWhite ? Piece.Queeni_ : Piece._Queen_, tempSelectedRow, tempSelectedColumn);
+                SetPiecePos(isWhite ? Piece.Queeni_ : Piece._Queen_, tempSelectedRow, tempSelectedColumn, 0, 0);
+                CheckKingCheck(isWhite);
                 break;
             }
             else if (selectedRow == tempSelectedRow && selectedColumn == tempSelectedColumn) // Selecting original pos to deselect
@@ -547,12 +622,14 @@ void KnightMove(int tempSelectedRow, int tempSelectedColumn)// ----- KNIGHT ----
         {
             if (canBeMovedTo[selectedRow, selectedColumn]) // Move
             {
-                SetPiecePos(isWhite ? Piece.Knighti : Piece.Knight_, tempSelectedRow, tempSelectedColumn);
+                SetPiecePos(isWhite ? Piece.Knighti : Piece.Knight_, tempSelectedRow, tempSelectedColumn, 0, 0);
+                CheckKingCheck(isWhite);
                 break;
             }
             if (canBeCaptured[selectedRow, selectedColumn]) // Capture
             {
-                SetPiecePos(isWhite ? Piece.Knighti : Piece.Knight_, tempSelectedRow, tempSelectedColumn);
+                SetPiecePos(isWhite ? Piece.Knighti : Piece.Knight_, tempSelectedRow, tempSelectedColumn, 0, 0);
+                CheckKingCheck(isWhite);
                 break;
             }
             else if (selectedRow == tempSelectedRow && selectedColumn == tempSelectedColumn) // Selecting original pos to deselect
@@ -594,6 +671,18 @@ void KingMove(int tempSelectedRow, int tempSelectedColumn) // ----- KING -----
         }
     }
 
+    void KingHasMoved()
+    {
+        if (isWhite)
+        {
+            whiteKingHasMoved = true;
+        }
+        else
+        {
+            blackKingHasMoved = true;
+        }
+    }
+
     while (true)
     {
         Move(1, 0);
@@ -611,7 +700,8 @@ void KingMove(int tempSelectedRow, int tempSelectedColumn) // ----- KING -----
             {
                 if (canBeMovedTo[tempSelectedRow, tempSelectedColumn - 1] &&
                     board[tempSelectedRow, tempSelectedColumn - 2] == Piece._______ &&
-                    board[tempSelectedRow, tempSelectedColumn - 3] == Piece._______)
+                    board[tempSelectedRow, tempSelectedColumn - 3] == Piece._______ &&
+                    isWhite? board[7, 0] == Piece._Rooki_ : board[0, 0] == Piece._Rook__)
                 {
                     Move(0, -2);
                 }
@@ -619,7 +709,8 @@ void KingMove(int tempSelectedRow, int tempSelectedColumn) // ----- KING -----
             if (isWhite? !whiteRook2HasMoved : !blackRook2HasMoved)
             {
                 if (canBeMovedTo[tempSelectedRow, tempSelectedColumn + 1] &&
-                    board[tempSelectedRow, tempSelectedColumn + 2] == Piece._______)
+                    board[tempSelectedRow, tempSelectedColumn + 2] == Piece._______ &&
+                    isWhite ? board[7, 7] == Piece._Rooki_ : board[0, 7] == Piece._Rook__)
                 {
                     Move(0, 2);
                 }
@@ -631,28 +722,47 @@ void KingMove(int tempSelectedRow, int tempSelectedColumn) // ----- KING -----
         {
             if (canBeMovedTo[selectedRow, selectedColumn]) // Move
             {
+                if (selectedColumn == tempSelectedColumn + 2)
+                {
+                    SetPiecePos(isWhite? Piece._Rooki_ : Piece._Rook__, isWhite? 7 : 0, 7, 0, -1);
+                }
+                if (selectedColumn == tempSelectedColumn - 2)
+                {
+                    SetPiecePos(isWhite? Piece._Rooki_ : Piece._Rook__, isWhite ? 7 : 0, 0, 0, 1);
+                }
+
+                KingHasMoved();
+                SetPiecePos(isWhite? Piece._Kingi_ : Piece._King__, tempSelectedRow, tempSelectedColumn, 0, 0);
+                CheckKingCheck(isWhite);
+
                 if (isWhite)
                 {
-                    whiteKingHasMoved = true;
+                    whiteKingRowPos = selectedRow;
+                    whiteKingColPos = selectedColumn;
                 }
                 else
                 {
-                    blackKingHasMoved = true;
+                    blackKingRowPos = selectedRow;
+                    blackKingColPos= selectedColumn;
                 }
-                SetPiecePos(isWhite ? Piece._Kingi_ : Piece._King__, tempSelectedRow, tempSelectedColumn);
                 break;
             }
             if (canBeCaptured[selectedRow, selectedColumn]) // Capture
             {
+                KingHasMoved();
+                SetPiecePos(isWhite? Piece._Kingi_ : Piece._King__, tempSelectedRow, tempSelectedColumn, 0, 0);
+                CheckKingCheck(isWhite);
+
                 if (isWhite)
                 {
-                    whiteKingHasMoved = true;
+                    whiteKingRowPos = selectedRow;
+                    whiteKingColPos = selectedColumn;
                 }
                 else
                 {
-                    blackKingHasMoved = true;
+                    blackKingRowPos = selectedRow;
+                    blackKingColPos = selectedColumn;
                 }
-                SetPiecePos(isWhite ? Piece._Kingi_ : Piece._King__, tempSelectedRow, tempSelectedColumn);
                 break;
             }
             else if (selectedRow == tempSelectedRow && selectedColumn == tempSelectedColumn) // Selecting original pos to deselect
@@ -678,7 +788,7 @@ void DrawBoard()
         {
             Console.SetCursorPosition(3 + length * 10, 2 + height * 3);
             
-            DrawSquare(height, length, canBeCaptured[height, length], canBeMovedTo[height, length]);
+            DrawSquare(height, length, canBeCaptured[height, length], canBeMovedTo[height, length], kingCheckSquares[height, length]);
         }
     }
 }
@@ -686,7 +796,7 @@ void DrawBoard()
 /// Updates the square to be redrawn with the current data
 void UpdateSquare(int offsetRow, int offsetCol)
 {
-    DrawSquare(selectedRow + offsetRow, selectedColumn + offsetCol, false, false);
+    DrawSquare(selectedRow + offsetRow, selectedColumn + offsetCol, false, false, false);
 }
 
 /// Moves the selected square around
@@ -727,7 +837,7 @@ ConsoleKey MoveSelectedSquare() // Navigate the board
             {
                 selectedColumn++;
                 UpdateSquare(0, -1);
-                UpdateSquare(0, 0);  
+                UpdateSquare(0, 0);
             }
             break;
     }
@@ -781,7 +891,7 @@ while (true)
     }
     else if (MoveSelectedSquare() == ConsoleKey.E)
     {
-        SetPiecePos(Piece._______, selectedRow, selectedColumn);
+        SetPiecePos(Piece._______, selectedRow, selectedColumn, 0, 0);
     }
 }
 
